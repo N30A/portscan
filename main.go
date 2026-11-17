@@ -6,6 +6,7 @@ import (
 	"flag"
 	"fmt"
 	"net"
+	"net/netip"
 	"os"
 	"os/signal"
 	"sync"
@@ -38,7 +39,7 @@ func dialPort(ctx context.Context, host, port string) (Status, error) {
 	return StatusOpen, nil
 }
 
-func worker(ctx context.Context, cancel context.CancelCauseFunc, host string, tasks <-chan string) {
+func worker(ctx context.Context, cancel context.CancelCauseFunc, host string, tasks <-chan string, islocalAddress bool) {
 	for {
 		select {
 		case <-ctx.Done():
@@ -55,6 +56,10 @@ func worker(ctx context.Context, cancel context.CancelCauseFunc, host string, ta
 			}
 
 			if status == StatusClosed {
+				continue
+			}
+
+			if !islocalAddress && status == StatusFiltered {
 				continue
 			}
 
@@ -99,6 +104,14 @@ func main() {
 		os.Exit(1)
 	}
 
+	addr, err := netip.ParseAddr(host)
+	if err != nil {
+		fmt.Println(err)
+		os.Exit(1)
+	}
+
+	isLocalAddress := addr.IsPrivate() || addr.IsLoopback() || addr.IsLinkLocalUnicast()
+
 	fmt.Printf("Starting portscan at %s\n", time.Now().Format(time.DateTime))
 	fmt.Printf("%-10s %-10s\n", "PORT", "STATUS")
 
@@ -112,7 +125,7 @@ func main() {
 
 	for range *workers {
 		wg.Go(func() {
-			worker(ctx, cancel, host, tasks)
+			worker(ctx, cancel, host, tasks, isLocalAddress)
 		})
 	}
 
