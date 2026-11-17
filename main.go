@@ -91,23 +91,22 @@ func main() {
 	if flag.NArg() != 2 {
 		fmt.Println("host and port(s) are required")
 		usage()
-		os.Exit(1)
+		os.Exit(2)
 	}
 
 	args := flag.Args()
 
-	host := args[0]
+	addr, err := netip.ParseAddr(args[0])
+	if err != nil {
+		fmt.Println(err)
+		os.Exit(2)
+	}
+
 	ports, err := parsePorts(args[1])
 	if err != nil {
 		fmt.Println(err)
 		usage()
-		os.Exit(1)
-	}
-
-	addr, err := netip.ParseAddr(host)
-	if err != nil {
-		fmt.Println(err)
-		os.Exit(1)
+		os.Exit(2)
 	}
 
 	isLocalAddress := addr.IsPrivate() || addr.IsLoopback() || addr.IsLinkLocalUnicast()
