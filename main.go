@@ -6,7 +6,6 @@ import (
 	"flag"
 	"fmt"
 	"net"
-	"net/netip"
 	"os"
 	"os/signal"
 	"sync"
@@ -68,6 +67,21 @@ func worker(ctx context.Context, cancel context.CancelCauseFunc, host string, ta
 	}
 }
 
+func isLocalAddress(ctx context.Context, host string) bool {
+	ips, err := net.DefaultResolver.LookupNetIP(ctx, "ip", host)
+	if err != nil {
+		return false
+	}
+
+	for _, ip := range ips {
+		if ip.IsPrivate() || ip.IsLoopback() || ip.IsLinkLocalUnicast() {
+			return true
+		}
+	}
+
+	return false
+}
+
 func usage() {
 	fmt.Println("\nUsage")
 	fmt.Println("portscan [flags] <host> <port(s)>")
@@ -96,20 +110,13 @@ func main() {
 
 	args := flag.Args()
 
-	addr, err := netip.ParseAddr(args[0])
-	if err != nil {
-		fmt.Println(err)
-		os.Exit(2)
-	}
-
+	host := args[0]
 	ports, err := parsePorts(args[1])
 	if err != nil {
 		fmt.Println(err)
 		usage()
 		os.Exit(2)
 	}
-
-	isLocalAddress := addr.IsPrivate() || addr.IsLoopback() || addr.IsLinkLocalUnicast()
 
 	fmt.Printf("Starting portscan at %s\n", time.Now().Format(time.DateTime))
 	fmt.Printf("%-10s %-10s\n", "PORT", "STATUS")
@@ -121,6 +128,8 @@ func main() {
 
 	ctx, cancel := context.WithCancelCause(signalCtx)
 	defer cancel(nil)
+
+	isLocalAddress := isLocalAddress(ctx, host)
 
 	for range *workers {
 		wg.Go(func() {
